@@ -9,11 +9,11 @@ const startResetTask = require('./reset');   // Import cron job
 const app = express();
 app.use(cors());
 app.use(express.json());
-console.log("🔍 Checking .env variable:", process.env.MONGO_URI); // ADD THIS LINE
+console.log("Checking .env variable:", process.env.MONGO_URI); // ADD THIS LINE
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ Connected to MongoDB Atlas"))
-  .catch(err => console.log("❌ DB Error:", err));
+  .then(() => console.log("Connected to MongoDB Atlas"))
+  .catch(err => console.log("DB Error:", err));
 
 // Use the routes from brain.js
 app.use('/api', brainRoutes);
