@@ -13,10 +13,10 @@ mongoose.connect(process.env.MONGO_URI)
     // Clear existing data first so you don't get duplicates
     await Area.deleteMany({}); 
     await Area.insertMany(sampleAreas);
-    console.log("🌱 Success: Data seeded into MongoDB!");
+    console.log("Success: Data seeded into MongoDB!");
     process.exit();
   })
   .catch(err => {
-    console.error("❌ Seeding failed:", err);
+    console.error("Seeding failed:", err);
     process.exit(1);
   });
