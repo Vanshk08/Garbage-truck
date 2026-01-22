@@ -1,9 +1,12 @@
 {
+  "name": "wastetrack",
+  "version": "1.0.0",
+  "main": "api/server.js",
   "dependencies": {
-    "cors": "^2.8.6",
-    "dotenv": "^17.2.3",
-    "express": "^5.2.1",
-    "mongoose": "^9.1.5",
-    "node-cron": "^4.2.1"
+    "express": "^4.18.2",
+    "mongoose": "^7.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "node-cron": "^3.0.2"
   }
 }

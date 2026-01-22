@@ -1,6 +1,6 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { Area } = require('./collection'); // Ensure this filename is correct
+const { Area } = require('./api/collection'); // Ensure this filename is correct
 
 const sampleAreas = [
   { name: "College Main Gate", location: { lat: 28.6139, lng: 77.2090 }, isCollected: false },
