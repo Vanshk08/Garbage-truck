@@ -16,15 +16,16 @@ router.get('/areas-status', async (req, res) => {
 router.patch('/collect/:areaId', async (req, res) => {
   try {
     const area = await Area.findByIdAndUpdate(req.params.areaId, {
-      isCollected: true,
+      isCollected: true,          // Keeps your boolean logic happy
+      status: 'collected',        // FIX: Keeps your string logic happy
       lastCollectedAt: new Date()
     }, { new: true });
+    
     res.json(area);
   } catch (err) {
     res.status(500).json({ error: "Update failed" });
   }
 });
-
 // 3. Route: User files a complaint
 router.post('/complaint', async (req, res) => {
   try {
