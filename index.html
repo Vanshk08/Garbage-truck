@@ -110,20 +110,33 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // 1. At the very top of your <script>, add this:
-let currentMarkers = []; 
+ // 1. Configuration & Global Variables
+const API_BASE = window.location.hostname === "localhost" ? "http://localhost:5000/api" : "/api";
+const map = L.map('map').setView([28.6139, 77.2090], 13);
+let currentMarkers = []; // This tracks our circles to prevent stacking
+let areasData = [];      // This tracks our database info
 
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+}).addTo(map);
+
+// 2. The MASTER loadAreas Function (Fixed Logic)
 async function loadAreas() {
     try {
         const response = await fetch(`${API_BASE}/areas-status`);
         const areas = await response.json();
+        areasData = areas; 
         
-        // 2. Clear old markers from the map
+        // Update stats
+        document.getElementById('stats').innerText = `System Active: Tracking ${areas.length} Areas`;
+
+        // IMPORTANT: Clear old circles before drawing new ones
         currentMarkers.forEach(m => map.removeLayer(m));
-        currentMarkers = []; // Reset the array
+        currentMarkers = [];
 
         areas.forEach(area => {
-            const isPending = area.status === 'pending';
+            // Check BOTH status and boolean to be 100% sure
+            const isPending = area.status === 'pending' || area.isCollected === false;
             const color = isPending ? '#e74c3c' : '#2ecc71';
 
             const marker = L.circle([area.location.lat, area.location.lng], {
@@ -133,412 +146,140 @@ async function loadAreas() {
                 radius: 400 
             }).addTo(map);
 
-            // 3. Save marker to our array so we can remove it later
             currentMarkers.push(marker);
 
-            marker.bindPopup(`... your popup code ...`);
+            marker.bindPopup(`
+                <div style="text-align:center;">
+                    <b style="font-size:1.1rem;">${area.name}</b><br>
+                    <code style="background:#eee; padding:2px 4px; display:block; margin:5px 0;">ID: ${area._id}</code>
+                    <button onclick="copyId('${area._id}')" style="font-size:10px; padding:2px 5px; margin-bottom:10px;">Copy ID to Form</button><br>
+                    Status: <b>${isPending ? 'Pending' : 'Collected'}</b><br><br>
+                    ${isPending ? 
+                        `<button onclick="markCollected('${area._id}')" style="background:#27ae60; color:white; border:none; padding:8px; border-radius:3px; cursor:pointer; font-weight:bold;">🚛 Mark Collected</button>` 
+                        : `<span style="color:#27ae60; font-weight:bold;">✅ Cleaned!</span>`
+                    }
+                </div>
+            `);
         });
-    } catch (err) { console.error(err); }
+        
+        updateTruckTracking();
+    } catch (err) {
+        console.error("Load Error:", err);
+        document.getElementById('stats').innerText = "Offline: Backend not connected";
+    }
 }
-        // Use relative path for Vercel, localhost for local dev
-        const API_BASE = window.location.hostname === "localhost" ? "http://localhost:5000/api" : "/api";
 
-        const map = L.map('map').setView([28.6139, 77.2090], 13); 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
-        // Create custom truck icon with SVG
-        function createTruckIcon(truckId, rotation = 0) {
-            return L.divIcon({
-                className: 'truck-icon-wrapper',
-                html: `
-                    <svg class="truck-svg" width="45" height="45" viewBox="0 0 45 45" style="transform: rotate(${rotation}deg);">
-                        <!-- Truck body/container -->
-                        <rect x="10" y="16" width="22" height="14" fill="#e67e22" stroke="#fff" stroke-width="2.5" rx="2"/>
-                        <!-- Truck cab -->
-                        <rect x="6" y="19" width="9" height="11" fill="#d35400" stroke="#fff" stroke-width="2.5" rx="1.5"/>
-                        <!-- Truck windshield -->
-                        <rect x="7" y="20" width="7" height="6" fill="#3498db" stroke="#fff" stroke-width="1"/>
-                        <!-- Back wheels -->
-                        <circle cx="15" cy="32" r="3.5" fill="#2c3e50" stroke="#fff" stroke-width="2"/>
-                        <circle cx="15" cy="32" r="2" fill="#34495e"/>
-                        <!-- Front wheels -->
-                        <circle cx="30" cy="32" r="3.5" fill="#2c3e50" stroke="#fff" stroke-width="2"/>
-                        <circle cx="30" cy="32" r="2" fill="#34495e"/>
-                        <!-- Container detail lines -->
-                        <line x1="16" y1="17" x2="16" y2="30" stroke="#fff" stroke-width="1.5"/>
-                        <line x1="22" y1="17" x2="22" y2="30" stroke="#fff" stroke-width="1.5"/>
-                        <!-- Container top -->
-                        <rect x="10" y="16" width="22" height="3" fill="#c0392b" rx="2"/>
-                    </svg>
-                `,
-                iconSize: [45, 45],
-                iconAnchor: [22.5, 22.5]
-            });
-        }
-
-        // Truck positions and routes on actual roads (coordinates aligned with visible roads on the map)
-        const trucks = [
-            { 
-                id: 'Truck-001', 
-                position: [28.6140, 77.2092], 
-                rotation: 35,
-                route: [
-                    [28.6140, 77.2092],
-                    [28.6142, 77.2094],
-                    [28.6145, 77.2097],
-                    [28.6148, 77.2100],
-                    [28.6150, 77.2102],
-                    [28.6152, 77.2104],
-                    [28.6154, 77.2106],
-                    [28.6156, 77.2108],
-                    [28.6158, 77.2110],
-                    [28.6160, 77.2112],
-                    [28.6158, 77.2110],
-                    [28.6156, 77.2108],
-                    [28.6154, 77.2106],
-                    [28.6152, 77.2104],
-                    [28.6150, 77.2102],
-                    [28.6148, 77.2100],
-                    [28.6145, 77.2097],
-                    [28.6142, 77.2094],
-                    [28.6140, 77.2092]
-                ],
-                color: '#3498db'
-            },
-            { 
-                id: 'Truck-002', 
-                position: [28.6123, 77.2083], 
-                rotation: -25,
-                route: [
-                    [28.6123, 77.2083],
-                    [28.6125, 77.2085],
-                    [28.6127, 77.2087],
-                    [28.6129, 77.2089],
-                    [28.6131, 77.2091],
-                    [28.6133, 77.2093],
-                    [28.6135, 77.2095],
-                    [28.6137, 77.2097],
-                    [28.6139, 77.2099],
-                    [28.6141, 77.2101],
-                    [28.6139, 77.2099],
-                    [28.6137, 77.2097],
-                    [28.6135, 77.2095],
-                    [28.6133, 77.2093],
-                    [28.6131, 77.2091],
-                    [28.6129, 77.2089],
-                    [28.6127, 77.2087],
-                    [28.6125, 77.2085],
-                    [28.6123, 77.2083]
-                ],
-                color: '#2ecc71'
-            },
-            { 
-                id: 'Truck-003', 
-                position: [28.6152, 77.2102], 
-                rotation: 145,
-                route: [
-                    [28.6152, 77.2102],
-                    [28.6150, 77.2100],
-                    [28.6148, 77.2098],
-                    [28.6146, 77.2096],
-                    [28.6144, 77.2094],
-                    [28.6142, 77.2092],
-                    [28.6140, 77.2090],
-                    [28.6138, 77.2088],
-                    [28.6136, 77.2086],
-                    [28.6134, 77.2084],
-                    [28.6136, 77.2086],
-                    [28.6138, 77.2088],
-                    [28.6140, 77.2090],
-                    [28.6142, 77.2092],
-                    [28.6144, 77.2094],
-                    [28.6146, 77.2096],
-                    [28.6148, 77.2098],
-                    [28.6150, 77.2100],
-                    [28.6152, 77.2102]
-                ],
-                color: '#9b59b6'
-            }
-        ];
-
-        // Function to add trucks and routes to map
-        function addTrucksToMap() {
-            trucks.forEach(truck => {
-                // Draw route polyline following roads
-                const routePolyline = L.polyline(truck.route, {
-                    color: truck.color,
-                    weight: 3,
-                    opacity: 0.6,
-                    smoothFactor: 1.0,
-                    lineCap: 'round',
-                    lineJoin: 'round'
-                }).addTo(map);
-
-                // Add truck marker at current position
-                const truckMarker = L.marker(truck.position, {
-                    icon: createTruckIcon(truck.id, truck.rotation)
-                }).addTo(map);
-            });
-        }
-
-        // Add trucks to map after areas are loaded
-        setTimeout(addTrucksToMap, 500);
-
-        let areasData = [];
-
-        async function loadAreas() {
-            try {
-                const response = await fetch(`${API_BASE}/areas-status`);
-                const areas = await response.json();
-                areasData = areas; // Store for truck tracking
-                document.getElementById('stats').innerText = `System Active: Tracking ${areas.length} Areas`;
-
-                areas.forEach(area => {
-    // 1. FIX: Check for the 'status' string instead of 'isCollected'
-    // This ensures that if status is "pending", it's RED.
-    const isPending = area.status === 'pending';
-    const color = isPending ? '#e74c3c' : '#2ecc71'; // Red if pending, Green if not
-
-    const marker = L.circle([area.location.lat, area.location.lng], {
-        color: color, 
-        fillColor: color, 
-        fillOpacity: 0.5, 
-        radius: 400 
-    }).addTo(map);
-
-    marker.bindPopup(`
-        <div style="text-align:center;">
-            <b style="font-size:1.1rem;">${area.name}</b><br>
-            <code style="background:#eee; padding:2px 4px; display:block; margin:5px 0;">ID: ${area._id}</code>
-            <button onclick="copyId('${area._id}')" style="font-size:10px; padding:2px 5px; margin-bottom:10px;">Copy ID to Form</button><br>
-            Status: <b>${isPending ? 'Pending' : 'Collected'}</b><br><br>
-            
-            ${isPending ? 
-                `<button onclick="markCollected('${area._id}')" style="background:#27ae60; color:white; border:none; padding:8px; border-radius:3px; cursor:pointer; font-weight:bold;">🚛 Mark Collected</button>` 
-                : `<span style="color:#27ae60; font-weight:bold;">✅ Cleaned!</span>`
-            }
-        </div>
-    `);
-});
-                
-                // Update truck tracking after areas are loaded
-                updateTruckTracking();
-            } catch (err) {
-                document.getElementById('stats').innerText = "Offline: Backend not connected";
-            }
-        }
-
-        // Calculate distance between two coordinates (in km)
-        function calculateDistance(lat1, lon1, lat2, lon2) {
-            const R = 6371; // Earth's radius in km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
-
-        // Find nearest area to a coordinate
-        function findNearestArea(lat, lng) {
-            if (areasData.length === 0) return null;
-            
-            let nearest = areasData[0];
-            let minDistance = calculateDistance(lat, lng, nearest.location.lat, nearest.location.lng);
-            
-            areasData.forEach(area => {
-                const distance = calculateDistance(lat, lng, area.location.lat, area.location.lng);
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearest = area;
-                }
-            });
-            
-            return { area: nearest, distance: minDistance };
-        }
-
-        // Get next route point for a truck
-        function getNextRoutePoint(truck) {
-            const currentPos = truck.position;
-            let minDist = Infinity;
-            let nextPoint = truck.route[0];
-            let nextIndex = 0;
-            
-            // Find current position in route
-            truck.route.forEach((point, index) => {
-                const dist = calculateDistance(currentPos[0], currentPos[1], point[0], point[1]);
-                if (dist < minDist) {
-                    minDist = dist;
-                    nextIndex = (index + 1) % truck.route.length;
-                    nextPoint = truck.route[nextIndex];
-                }
-            });
-            
-            return nextPoint;
-        }
-
-        // Area names for display
-        const areaNames = [
-            'College Main Gate', 'Library Lane', 'Hostel Block A',
-            'Sports Complex', 'Cafeteria Area', 'Parking Lot B',
-            'Admin Building', 'Student Center', 'Residential Block C',
-            'Gymnasium', 'Auditorium', 'Medical Center'
-        ];
-
-        // Get random area name
-        function getRandomArea() {
-            if (areasData.length > 0) {
-                // Use actual area names if available
-                const randomArea = areasData[Math.floor(Math.random() * areasData.length)];
-                return randomArea.name;
-            }
-            // Fallback to predefined names
-            return areaNames[Math.floor(Math.random() * areaNames.length)];
-        }
-
-        // Get random time (5-45 minutes from now)
-        function getRandomTime() {
-            const now = new Date();
-            const randomMinutes = Math.floor(Math.random() * 40) + 5; // 5-45 minutes
-            const arrivalTime = new Date(now.getTime() + randomMinutes * 60000);
-            
-            const timeStr = arrivalTime.toLocaleTimeString('en-US', { 
-                hour: '2-digit', 
-                minute: '2-digit',
-                hour12: true 
-            });
-            
-            return { timeStr, minutes: randomMinutes };
-        }
-
-        // Update truck tracking table
-        function updateTruckTracking() {
-            const tableBody = document.getElementById('truckTrackingBody');
-            tableBody.innerHTML = '';
-            
-            // Store truck tracking data to maintain consistency
-            if (!window.truckTrackingData) {
-                window.truckTrackingData = {};
-                trucks.forEach(truck => {
-                    window.truckTrackingData[truck.id] = {
-                        area: getRandomArea(),
-                        timeData: getRandomTime()
-                    };
-                });
-            }
-            
-            trucks.forEach(truck => {
-                // Occasionally update the data (10% chance on each refresh)
-                if (Math.random() < 0.1) {
-                    window.truckTrackingData[truck.id] = {
-                        area: getRandomArea(),
-                        timeData: getRandomTime()
-                    };
-                }
-                
-                const tracking = window.truckTrackingData[truck.id];
-                const { timeStr, minutes } = tracking.timeData;
-                
-                // Determine status based on time
-                let statusColor, statusText;
-                if (minutes < 10) {
-                    statusColor = '#2ecc71';
-                    statusText = 'Arriving Soon';
-                } else if (minutes < 25) {
-                    statusColor = '#f39c12';
-                    statusText = 'On Route';
-                } else {
-                    statusColor = '#3498db';
-                    statusText = 'En Route';
-                }
-                
-                tableBody.innerHTML += `
-                    <tr style="border-bottom: 1px solid #eee;">
-                        <td style="font-weight:bold; color:${truck.color}; padding: 12px;">${truck.id}</td>
-                        <td style="padding: 12px;">${tracking.area}</td>
-                        <td style="padding: 12px; font-weight:500;">${timeStr}<br><span style="font-size:0.85rem; color:#7f8c8d;">(${minutes} min)</span></td>
-                        <td style="padding: 12px;"><span style="color:${statusColor}; font-weight:bold; padding: 4px 8px; background:${statusColor}20; border-radius: 4px;">${statusText}</span></td>
-                    </tr>
-                `;
-            });
-        }
-
-        function copyId(id) { document.getElementById('areaId').value = id; }
-
-        async function markCollected(id) {
+// 3. Mark Collected Function
+async function markCollected(id) {
     try {
         const response = await fetch(`${API_BASE}/collect/${id}`, { 
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: 'collected' }) // Send the status update
+            body: JSON.stringify({ status: 'collected' })
         });
         
         if (response.ok) {
-            alert("Area marked as collected!");
-            // Instead of reloading the whole page, just refresh the areas
-            loadAreas(); 
+            // Re-run the map update without refreshing the whole page
+            await loadAreas(); 
+            alert("Area updated successfully!");
         }
     } catch (err) { alert("Error updating status"); }
 }
-        async function fileComplaint() {
-            const areaId = document.getElementById('areaId').value;
-            const description = document.getElementById('reason').value;
-            if (!areaId || !description) { alert("Please fill all fields!"); return; }
 
-            try {
-                const response = await fetch(`${API_BASE}/complaint`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ areaId, description })
-                });
-                document.getElementById('complaintMsg').innerText = "Complaint Sent Successfully!";
-                document.getElementById('areaId').value = "";
-                document.getElementById('reason').value = "";
-            } catch (err) { alert("Failed to send complaint"); }
-        }
+// 4. Complaint Management
+async function fileComplaint() {
+    const areaId = document.getElementById('areaId').value;
+    const description = document.getElementById('reason').value;
+    if (!areaId || !description) { alert("Please fill all fields!"); return; }
 
-        async function viewComplaints() {
-            try {
-                const response = await fetch(`${API_BASE}/view-complaints`);
-                const complaints = await response.json();
-                const tableBody = document.getElementById('complaintTableBody');
-                tableBody.innerHTML = ""; 
+    try {
+        await fetch(`${API_BASE}/complaint`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ areaId, description })
+        });
+        document.getElementById('complaintMsg').innerText = "Complaint Sent Successfully!";
+        document.getElementById('areaId').value = "";
+        document.getElementById('reason').value = "";
+    } catch (err) { alert("Failed to send complaint"); }
+}
 
-                if(complaints.length === 0) {
-                    tableBody.innerHTML = "<tr><td colspan='4'>No complaints found.</td></tr>";
-                    return;
-                }
+async function viewComplaints() {
+    try {
+        const response = await fetch(`${API_BASE}/view-complaints`);
+        const complaints = await response.json();
+        const tableBody = document.getElementById('complaintTableBody');
+        tableBody.innerHTML = complaints.length === 0 ? "<tr><td colspan='4'>No complaints found.</td></tr>" : ""; 
 
-                complaints.forEach(c => {
-                    tableBody.innerHTML += `
-                        <tr>
-                            <td style="font-size:11px;">${c.areaId}</td>
-                            <td>${c.description}</td>
-                            <td><span class="status-badge" style="background:#ffeaa7; color:#d63031;">${c.status}</span></td>
-                            <td><button onclick="withdrawComplaint('${c._id}')" style="background:#e67e22; padding:5px 10px; font-size:12px;">Withdraw</button></td>
-                        </tr>
-                    `;
-                });
-            } catch (err) { console.error(err); }
-        }
+        complaints.forEach(c => {
+            tableBody.innerHTML += `
+                <tr>
+                    <td style="font-size:11px;">${c.areaId}</td>
+                    <td>${c.description}</td>
+                    <td><span class="status-badge" style="background:#ffeaa7; color:#d63031;">${c.status}</span></td>
+                    <td><button onclick="withdrawComplaint('${c._id}')" style="background:#e67e22; padding:5px 10px; font-size:12px;">Withdraw</button></td>
+                </tr>`;
+        });
+    } catch (err) { console.error(err); }
+}
 
-        async function withdrawComplaint(complaintId) {
-            if(!confirm("Resolve this complaint?")) return;
-            try {
-                const response = await fetch(`${API_BASE}/withdraw-complaint/${complaintId}`, { method: 'DELETE' });
-                const data = await response.json();
-                alert(data.message);
-                viewComplaints();
-            } catch (err) { alert("Error withdrawing complaint"); }
-        }
+async function withdrawComplaint(complaintId) {
+    if(!confirm("Resolve this complaint?")) return;
+    try {
+        const response = await fetch(`${API_BASE}/withdraw-complaint/${complaintId}`, { method: 'DELETE' });
+        const data = await response.json();
+        alert(data.message);
+        viewComplaints();
+    } catch (err) { alert("Error withdrawing complaint"); }
+}
 
-        loadAreas();
-        
-        // Auto-refresh truck tracking every 30 seconds
-        setInterval(updateTruckTracking, 30000);
+// 5. Truck Logic (Simplified for integration)
+function createTruckIcon(truckId, rotation = 0) {
+    return L.divIcon({
+        className: 'truck-icon-wrapper',
+        html: `<svg class="truck-svg" width="45" height="45" viewBox="0 0 45 45" style="transform: rotate(${rotation}deg);">
+                <rect x="10" y="16" width="22" height="14" fill="#e67e22" stroke="#fff" rx="2"/>
+                <rect x="6" y="19" width="9" height="11" fill="#d35400" stroke="#fff" rx="1.5"/>
+                <circle cx="15" cy="32" r="3.5" fill="#2c3e50" stroke="#fff"/>
+                <circle cx="30" cy="32" r="3.5" fill="#2c3e50" stroke="#fff"/>
+               </svg>`,
+        iconSize: [45, 45],
+        iconAnchor: [22.5, 22.5]
+    });
+}
+
+const trucks = [
+    { id: 'Truck-001', position: [28.6140, 77.2092], rotation: 35, color: '#3498db', route: [[28.6140, 77.2092], [28.6160, 77.2112]] },
+    { id: 'Truck-002', position: [28.6123, 77.2083], rotation: -25, color: '#2ecc71', route: [[28.6123, 77.2083], [28.6141, 77.2101]] }
+];
+
+function addTrucksToMap() {
+    trucks.forEach(truck => {
+        L.polyline(truck.route, { color: truck.color, weight: 3, opacity: 0.6 }).addTo(map);
+        L.marker(truck.position, { icon: createTruckIcon(truck.id, truck.rotation) }).addTo(map);
+    });
+}
+
+function updateTruckTracking() {
+    const tableBody = document.getElementById('truckTrackingBody');
+    tableBody.innerHTML = '';
+    trucks.forEach(truck => {
+        tableBody.innerHTML += `
+            <tr style="border-bottom: 1px solid #eee;">
+                <td style="font-weight:bold; color:${truck.color}; padding: 12px;">${truck.id}</td>
+                <td style="padding: 12px;">Monitoring Route</td>
+                <td style="padding: 12px;">Live</td>
+                <td style="padding: 12px;"><span style="color:#2ecc71; font-weight:bold;">Active</span></td>
+            </tr>`;
+    });
+}
+
+function copyId(id) { document.getElementById('areaId').value = id; }
+
+// Initialize
+loadAreas();
+setTimeout(addTrucksToMap, 500);
+setInterval(loadAreas, 60000); // Auto-refresh every minute
     </script>
 </body>
 <footer style="text-align: center; padding: 20px; font-size: 0.8rem; color: #636e72;">
