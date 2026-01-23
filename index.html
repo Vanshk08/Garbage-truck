@@ -266,21 +266,32 @@
                 document.getElementById('stats').innerText = `System Active: Tracking ${areas.length} Areas`;
 
                 areas.forEach(area => {
-                    const color = area.isCollected ? '#2ecc71' : '#e74c3c';
-                    const marker = L.circle([area.location.lat, area.location.lng], {
-                        color: color, fillColor: color, fillOpacity: 0.5, radius: 400 
-                    }).addTo(map);
+    // 1. FIX: Check for the 'status' string instead of 'isCollected'
+    // This ensures that if status is "pending", it's RED.
+    const isPending = area.status === 'pending';
+    const color = isPending ? '#e74c3c' : '#2ecc71'; // Red if pending, Green if not
 
-                    marker.bindPopup(`
-                        <div style="text-align:center;">
-                            <b style="font-size:1.1rem;">${area.name}</b><br>
-                            <code style="background:#eee; padding:2px 4px; display:block; margin:5px 0;">ID: ${area._id}</code>
-                            <button onclick="copyId('${area._id}')" style="font-size:10px; padding:2px 5px; margin-bottom:10px;">Copy ID to Form</button><br>
-                            Status: <b>${area.isCollected ? 'Collected' : 'Pending'}</b><br><br>
-                            ${!area.isCollected ? `<button onclick="markCollected('${area._id}')" style="background:#27ae60; color:white; border:none; padding:5px; border-radius:3px; cursor:pointer;">Mark Collected</button>` : `<span style="color:#27ae60;">Cleaned!</span>`}
-                        </div>
-                    `);
-                });
+    const marker = L.circle([area.location.lat, area.location.lng], {
+        color: color, 
+        fillColor: color, 
+        fillOpacity: 0.5, 
+        radius: 400 
+    }).addTo(map);
+
+    marker.bindPopup(`
+        <div style="text-align:center;">
+            <b style="font-size:1.1rem;">${area.name}</b><br>
+            <code style="background:#eee; padding:2px 4px; display:block; margin:5px 0;">ID: ${area._id}</code>
+            <button onclick="copyId('${area._id}')" style="font-size:10px; padding:2px 5px; margin-bottom:10px;">Copy ID to Form</button><br>
+            Status: <b>${isPending ? 'Pending' : 'Collected'}</b><br><br>
+            
+            ${isPending ? 
+                `<button onclick="markCollected('${area._id}')" style="background:#27ae60; color:white; border:none; padding:8px; border-radius:3px; cursor:pointer; font-weight:bold;">🚛 Mark Collected</button>` 
+                : `<span style="color:#27ae60; font-weight:bold;">✅ Cleaned!</span>`
+            }
+        </div>
+    `);
+});
                 
                 // Update truck tracking after areas are loaded
                 updateTruckTracking();
@@ -428,13 +439,20 @@
         function copyId(id) { document.getElementById('areaId').value = id; }
 
         async function markCollected(id) {
-            try {
-                await fetch(`${API_BASE}/collect/${id}`, { method: 'PATCH' });
-                alert("Area marked as collected!");
-                location.reload(); 
-            } catch (err) { alert("Error updating status"); }
+    try {
+        const response = await fetch(`${API_BASE}/collect/${id}`, { 
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'collected' }) // Send the status update
+        });
+        
+        if (response.ok) {
+            alert("Area marked as collected!");
+            // Instead of reloading the whole page, just refresh the areas
+            loadAreas(); 
         }
-
+    } catch (err) { alert("Error updating status"); }
+}
         async function fileComplaint() {
             const areaId = document.getElementById('areaId').value;
             const description = document.getElementById('reason').value;
