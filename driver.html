@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Garbage Truck Driver</title>
+</head>
+<body>
+  <h2>Driver GPS Sender</h2>
+  <p id="status">Waiting for GPS...</p>
+
+  <script>
+    const BACKEND = "https://garbage-truck-backend-1.onrender.com";
+
+    navigator.geolocation.watchPosition(
+      pos => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        document.getElementById("status").innerText =
+          `Sending: ${lat}, ${lng}`;
+
+        fetch(BACKEND, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat, lng })
+        });
+      },
+      err => alert(err.message),
+      { enableHighAccuracy: true }
+    );
+  </script>
+</body>
+</html>
